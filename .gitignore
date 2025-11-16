@@ -2,4 +2,5 @@ hw4_tests/
 bst-test
 equal-paths-test
 *.o
+*.dSYM/
 
