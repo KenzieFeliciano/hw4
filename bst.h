@@ -250,6 +250,11 @@ protected:
     void clearHelper(Node<Key, Value>* node);
     int getHeight(Node<Key, Value>* node) const;
     bool checkBalance(Node<Key, Value>* node) const;
+    Node<Key, Value>* insertHelper(Node<Key, Value>* node, const std::pair<const Key, Value>& keyValuePair, Node<Key, Value>* parent);
+    Node<Key, Value>* internalFindHelper(Node<Key, Value>* node, const Key& key) const;
+    Node<Key, Value>* getSmallestHelper(Node<Key, Value>* node) const;
+    static Node<Key, Value>* getRightmostHelper(Node<Key, Value>* node);
+    static Node<Key, Value>* findPredecessorAncestorHelper(Node<Key, Value>* current, Node<Key, Value>* parent);
 
 
 protected:
@@ -353,7 +358,7 @@ BinarySearchTree<Key, Value>::iterator::operator++()
             current_ = parent;
             parent = parent->getParent();
         }
-        current_ = parent; // this will be NULL if we've reached the end
+        current_ = parent; // will be NULL if we've gone past the largest element
     }
     
     return *this;
@@ -470,42 +475,8 @@ Value const & BinarySearchTree<Key, Value>::operator[](const Key& key) const
 template<class Key, class Value>
 void BinarySearchTree<Key, Value>::insert(const std::pair<const Key, Value> &keyValuePair)
 {
-    // first check if key already exists, if so just update value
-    Node<Key, Value>* found = internalFind(keyValuePair.first);
-    if (found != NULL) {
-        found->setValue(keyValuePair.second);
-        return;
-    }
-    
-    // handle empty tree case
-    if (root_ == NULL) {
-        root_ = new Node<Key, Value>(keyValuePair.first, keyValuePair.second, NULL);
-        return;
-    }
-    
-    // walk down tree to find where new node should go
-    Node<Key, Value>* curr = root_;
-    Node<Key, Value>* par = NULL;
-    
-    while (curr != NULL) {
-        par = curr;
-        if (keyValuePair.first < curr->getKey()) {
-            curr = curr->getLeft();  // go left for smaller values
-        }
-        else {
-            curr = curr->getRight(); // go right for larger values
-        }
-    }
-    
-    // create new node and attach to parent
-    Node<Key, Value>* newNode = new Node<Key, Value>(keyValuePair.first, keyValuePair.second, par);
-    
-    if (keyValuePair.first < par->getKey()) {
-        par->setLeft(newNode);
-    }
-    else {
-        par->setRight(newNode);
-    }
+    // Use recursive helper
+    root_ = insertHelper(root_, keyValuePair, NULL);
 }
 
 
@@ -572,23 +543,16 @@ BinarySearchTree<Key, Value>::predecessor(Node<Key, Value>* current)
         return NULL;
     }
     
-    // Case 1: if has left child, go left then all the way right
+    // Case 1: if has left child, go left then all the way right using helper
     if (current->getLeft() != NULL) {
         current = current->getLeft();
-        while (current->getRight() != NULL) {
-            current = current->getRight();
-        }
-        return current;
+        // Find rightmost node in left subtree using helper
+        return getRightmostHelper(current);
     }
     
-    // Case 2: no left child - go up until we find where we came from right side
+    // Case 2: no left child - go up until we find where we came from right side using helper
     Node<Key, Value>* parent = current->getParent();
-    while (parent != NULL && current == parent->getLeft()) {
-        current = parent;
-        parent = parent->getParent();
-    }
-    
-    return parent;
+    return findPredecessorAncestorHelper(current, parent);
 }
 
 
@@ -627,19 +591,7 @@ template<typename Key, typename Value>
 Node<Key, Value>*
 BinarySearchTree<Key, Value>::getSmallestNode() const
 {
-    // base case: empty tree
-    if (root_ == NULL) {
-        return NULL;
-    }
-    
-    Node<Key, Value>* current = root_;
-    
-    // keep going left until we can't go any further (this is where the smallest node is)
-    while (current->getLeft() != NULL) {
-        current = current->getLeft();
-    }
-    
-    return current;
+    return getSmallestHelper(root_);
 }
 
 /**
@@ -650,22 +602,7 @@ BinarySearchTree<Key, Value>::getSmallestNode() const
 template<typename Key, typename Value>
 Node<Key, Value>* BinarySearchTree<Key, Value>::internalFind(const Key& key) const
 {
-    Node<Key, Value>* current = root_;
-    
-    // keep searching until we find it or run out of tree
-    while (current != NULL) {
-        if (key == current->getKey()) { 
-            return current; // found it!
-        }
-        else if (key < current->getKey()) {
-            current = current->getLeft();  // go left for smaller keys
-        }
-        else {
-            current = current->getRight(); // go right for larger keys
-        }
-    }
-    
-    return NULL; // key doesn't exist in tree
+    return internalFindHelper(root_, key);
 }
 
 /**
@@ -810,6 +747,87 @@ void BinarySearchTree<Key, Value>::nodeSwap( Node<Key,Value>* n1, Node<Key,Value
 
 // include print function (in its own file because it's fairly long)
 #include "print_bst.h"
+
+// Recursive helper for getSmallestNode
+template<class Key, class Value>
+Node<Key, Value>* BinarySearchTree<Key, Value>::getSmallestHelper(Node<Key, Value>* node) const
+{
+    // Base case: empty tree or no left child
+    if (node == NULL || node->getLeft() == NULL) {
+        return node;
+    }
+    
+    // Recurse left
+    return getSmallestHelper(node->getLeft());
+}
+
+// Recursive helper for BST insert
+template<class Key, class Value>
+Node<Key, Value>* BinarySearchTree<Key, Value>::insertHelper(Node<Key, Value>* node, const std::pair<const Key, Value>& keyValuePair, Node<Key, Value>* parent)
+{
+    // Base case: found the spot to insert
+    if (node == NULL) {
+        return new Node<Key, Value>(keyValuePair.first, keyValuePair.second, parent);
+    }
+    
+    // Key already exists, just update value
+    if (keyValuePair.first == node->getKey()) {
+        node->setValue(keyValuePair.second);
+        return node;
+    }
+    
+    // Update parent pointer
+    node->setParent(parent);
+    
+    // Recurse left or right
+    if (keyValuePair.first < node->getKey()) {
+        Node<Key, Value>* newLeft = insertHelper(node->getLeft(), keyValuePair, node);
+        node->setLeft(newLeft);
+    } else {
+        Node<Key, Value>* newRight = insertHelper(node->getRight(), keyValuePair, node);
+        node->setRight(newRight);
+    }
+    
+    return node;
+}
+
+// Recursive helper for BST internalFind
+template<class Key, class Value>
+Node<Key, Value>* BinarySearchTree<Key, Value>::internalFindHelper(Node<Key, Value>* node, const Key& key) const
+{
+    // Base case: node is null or we found the key
+    if (node == NULL || key == node->getKey()) {
+        return node;
+    }
+    
+    // Recurse left or right
+    if (key < node->getKey()) {
+        return internalFindHelper(node->getLeft(), key);
+    } else {
+        return internalFindHelper(node->getRight(), key);
+    }
+}
+
+// Static helper function to find rightmost node in a subtree (for predecessor)
+template<class Key, class Value>
+Node<Key, Value>* BinarySearchTree<Key, Value>::getRightmostHelper(Node<Key, Value>* node)
+{
+    if (node == NULL || node->getRight() == NULL) {
+        return node;
+    }
+    return getRightmostHelper(node->getRight());
+}
+
+// Static helper function to find predecessor ancestor (for predecessor)
+template<class Key, class Value>
+Node<Key, Value>* BinarySearchTree<Key, Value>::findPredecessorAncestorHelper(Node<Key, Value>* current, Node<Key, Value>* parent)
+{
+    while (parent != NULL && current == parent->getLeft()) {
+        current = parent;
+        parent = parent->getParent();
+    }
+    return parent; // will be NULL if current was already the smallest
+}
 
 /*
 ---------------------------------------------------

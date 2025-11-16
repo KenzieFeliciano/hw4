@@ -142,6 +142,9 @@ protected:
     void fixTree(AVLNode<Key, Value>* node, int8_t diff);
     void rotateLeft(AVLNode<Key, Value>* node);
     void rotateRight(AVLNode<Key, Value>* node);
+    
+    // Recursive helper for insert to replace the loop
+    AVLNode<Key, Value>* insertHelper(AVLNode<Key, Value>* curr, const std::pair<const Key, Value>& new_item, AVLNode<Key, Value>*& newNode);
 
 };
 
@@ -158,32 +161,13 @@ void AVLTree<Key, Value>::insert (const std::pair<const Key, Value> &new_item)
         return;
     }
     
-    // find where to put the new node - just like normal BST insertion
-    AVLNode<Key, Value>* curr = static_cast<AVLNode<Key, Value>*>(this->root_);
-    AVLNode<Key, Value>* parent = NULL;
+    // Use recursive helper to find insertion point and insert
+    AVLNode<Key, Value>* newNode = nullptr;
+    AVLNode<Key, Value>* parent = insertHelper(static_cast<AVLNode<Key, Value>*>(this->root_), new_item, newNode);
     
-    while (curr != NULL) {
-        if (new_item.first == curr->getKey()) {
-            // key already exists, just update the value and we're done
-            curr->setValue(new_item.second);
-            return;
-        }
-        
-        parent = curr;
-        if (new_item.first < curr->getKey()) {
-            curr = curr->getLeft();
-        } else {
-            curr = curr->getRight();
-        }
-    }
-    
-    // create and attach new node
-    AVLNode<Key, Value>* newNode = new AVLNode<Key, Value>(new_item.first, new_item.second, parent);
-    
-    if (new_item.first < parent->getKey()) {
-        parent->setLeft(newNode);
-    } else {
-        parent->setRight(newNode);
+    // If newNode is null, the key already existed and value was updated
+    if (newNode == nullptr) {
+        return;
     }
     
     // now handle the AVL balancing part. this was tricky to get right
@@ -586,6 +570,45 @@ void AVLTree<Key, Value>::rotateRight(AVLNode<Key, Value>* node)
     
     leftKid->setRight(node);
     node->setParent(leftKid);
+}
+
+// Recursive helper for insert - replaces the while loop
+template<class Key, class Value>
+AVLNode<Key, Value>* AVLTree<Key, Value>::insertHelper(AVLNode<Key, Value>* curr, const std::pair<const Key, Value>& new_item, AVLNode<Key, Value>*& newNode)
+{
+    if (curr == nullptr) {
+        // This shouldn't happen since we check for empty tree before calling this
+        return nullptr;
+    }
+    
+    if (new_item.first == curr->getKey()) {
+        // key already exists, just update the value and we're done
+        curr->setValue(new_item.second);
+        newNode = nullptr; // signal that no new node was created
+        return curr;
+    }
+    
+    if (new_item.first < curr->getKey()) {
+        if (curr->getLeft() == nullptr) {
+            // Found insertion point on left
+            newNode = new AVLNode<Key, Value>(new_item.first, new_item.second, curr);
+            curr->setLeft(newNode);
+            return curr; // return parent of new node
+        } else {
+            // Keep searching left
+            return insertHelper(curr->getLeft(), new_item, newNode);
+        }
+    } else {
+        if (curr->getRight() == nullptr) {
+            // Found insertion point on right
+            newNode = new AVLNode<Key, Value>(new_item.first, new_item.second, curr);
+            curr->setRight(newNode);
+            return curr; // return parent of new node
+        } else {
+            // Keep searching right
+            return insertHelper(curr->getRight(), new_item, newNode);
+        }
+    }
 }
 
 #endif

@@ -14,6 +14,10 @@ int checkEqualPaths(Node* root);
 
 bool equalPaths(Node * root)
 {
+    // Empty tree has equal paths (trivially true)
+    if (root == nullptr) {
+        return true;
+    }
     //if helper function returns -1, paths are NOT equal
     return checkEqualPaths(root) != -1;
 }
